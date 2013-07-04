@@ -1,0 +1,212 @@
+<!doctype html>
+<!-- Author: Jenny Murphy - http://google.com/+JennyMurphy -->
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glassware Starter Project</title>
+  <link href="static/bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <style>
+    .button-icon {
+      max-width: 75px;
+    }
+
+    .tile {
+      border-left: 1px solid #444;
+      padding: 5px;
+      list-style: none;
+    }
+
+    .btn {
+      width: 100%;
+    }
+  </style>
+  <script>
+    // Configuration
+    // Get these from https://developers.google.com/console
+    var clientId = 'YOUR_CLIENT_ID';
+    var apiKey = 'YOUR_API_KEY';
+
+    var scopes = 'https://www.googleapis.com/auth/userinfo.profile ' +
+        'https://www.googleapis.com/auth/glass.timeline';
+
+    // Executes after Google API Client for JavaScript loads
+    function handleClientLoad() {
+      // Step 2: Reference the API key
+      gapi.client.setApiKey(apiKey);
+      window.setTimeout(function() {
+        // Wait for the client library to finish loading and auth
+        // Once that's done, load a few timeline items
+        gapi.auth.authorize({client_id: clientId, scope: scopes, immediate: false}, loadTimeline);
+      }, 1);
+    }
+
+    function loadTimeline() {
+      // Load the API client
+      gapi.client.load('mirror', 'v1', function () {
+        // Construct a request
+        var request = gapi.client.mirror.timeline.list({
+          'maxResults': 3
+        });
+        // Execute it and populate our interface with timeline items
+        request.execute(function (resp) {
+          var timelineHtml = "";
+          for(var i in resp.items) {
+            var item = resp.items[i];
+            timelineHtml += '<ul class="span3 tile">' +
+                '<li><strong>ID: </strong>'+item.id+'</li>' +
+                '<li><strong>Text: </strong>'+item.text+'</li></ul>'
+          }
+
+          $('#timelineContainer').fadeOut("slow", function(){
+            $(this).html(timelineHtml);
+            $('#timelineContainer').fadeIn("slow");
+          });
+        });
+      });
+    }
+
+    function displayMessage(text) {
+      var $message = $("#message");
+      $message.html(text).show(500);
+      setTimeout(function() {
+        $message.hide(500);
+      }, 2000);
+    }
+
+    function insertTimelineItem(timelineItem) {
+      gapi.client.load('mirror', 'v1', function () {
+        // Construct a request
+        var request = gapi.client.mirror.timeline.insert({
+          'resource': timelineItem
+        });
+        // Execute it and populate our interface with timeline items
+        request.execute(function (resp) {
+          displayMessage("Timeline item inserted");
+          loadTimeline();
+        });
+      });
+    }
+    /**
+     * This does not work for some reason :(
+     * TODO: fix it
+     */
+    function insertTimelineItemWithAttachment(timelineItem, attachment) {
+      const boundary = '-------314159265358979323846';
+      const delimiter = "\r\n--" + boundary + "\r\n";
+      const close_delim = "\r\n--" + boundary + "--";
+
+      var contentType = 'image/jpeg';
+      var multipartRequestBody =
+          delimiter +
+              'Content-Type: application/json\r\n\r\n' +
+              JSON.stringify(timelineItem) +
+              delimiter +
+              'Content-Type: ' + contentType + '\r\n' +
+              'Content-Transfer-Encoding: binary\r\n' +
+              '\r\n' +
+              attachment +
+              close_delim;
+
+      var request = gapi.client.request({
+        'path': '/upload/mirror/v1/timeline',
+        'method': 'POST',
+        'params': {'uploadType': 'multipart'},
+        'headers': {
+          'Content-Type': 'multipart/related; boundary="' + boundary + '"'
+        },
+        'body': multipartRequestBody});
+
+      request.execute(function() {
+        displayMessage("Timeline item inserted");
+        loadTimeline();
+      });
+    }
+
+    $( document ).ready(function() {
+      $("#insert-message-submit").click(function(event) {
+        event.preventDefault();
+        var message = $("#insert-message").val();
+        insertTimelineItem({'text': message, 'notification': {'level': 'DEFAULT'} });
+      });
+
+      $("#insert-menu-submit").click(function(event) {
+        event.preventDefault();
+        insertTimelineItem({
+          text:'What did you have for lunch today?',
+          menuItems:[
+            {"action": "REPLY"},
+            {"action": "READ_ALOUD"}
+          ],
+          'notification': {'level': 'DEFAULT'}
+        });
+      });
+
+      $("#insert-picture-submit").click(function(event) {
+        var attachmentUrl = $("#insert-picture-url").val();
+        event.preventDefault();
+        $.ajax({
+          url: attachmentUrl,
+          cache: false
+        }).done(function( bytes ) {
+              insertTimelineItemWithAttachment({text:"Chipotle says hi!"}, bytes);
+        });
+      });
+    });
+  </script>
+</head>
+<body>
+<div class="navbar navbar-inverse navbar-fixed-top">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="brand" href="#">Glassware Example: JavaScript Edition</a>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="hero-unit">
+    <h1>Your Recent Timeline</h1>
+    <div style="height: 20px;"><span class="label label-warning hide" id="message"></span></div>
+
+    <div style="margin-top: 5px; min-height: 120px;" id="timelineContainer">
+    </div>
+    <div style="clear:both;"></div>
+  </div>
+
+  <div class="row">
+    <div class="span4">
+      <h2>Timeline</h2>
+
+      <p>When you first sign in, this Glassware inserts a welcome message. Use
+        these controls to insert more items into your timeline. Learn more about
+        the timeline APIs
+        <a href="https://developers.google.com/glass/timeline">here</a></p>
+
+
+      <form>
+        <textarea id="insert-message">Hello World!</textarea><br/>
+        <button class="btn" id="insert-message-submit">The above message</button>
+      </form>
+
+      <!-- Commenting out until this works -->
+      <!--<form>-->
+        <!--<input type="hidden" name="imageUrl" id="insert-picture-url"-->
+               <!--value="http://localhost/mirror-example-javascript/static/images/chipotle-tube-640x360.jpg">-->
+        <!--<button class="btn" id="insert-picture-submit">A picture-->
+          <!--<img class="button-icon" src="static/images/chipotle-tube-640x360.jpg">-->
+        <!--</button>-->
+      <!--</form>-->
+
+      <form method="post">
+        <input type="hidden" name="operation" value="insertItemWithAction">
+        <button class="btn" id="insert-menu-submit">A card you can reply to</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://apis.google.com/js/client.js?onload=handleClientLoad"></script>
+</body>
+</html>
